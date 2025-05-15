@@ -1,48 +1,79 @@
+// ignore_for_file: cast_from_null_always_fails
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:myapp/data/repositories/todo_repository_impl.dart';
 import 'package:myapp/domain/entities/todo.dart';
-import 'package:myapp/data/models/todo_model.dart'; // Assuming you have a TodoModel
+import 'package:myapp/data/models/todo_model.dart';
 import 'dart:async';
 
-// Create a mock data source (e.g., a mock API client or database helper)
-class MockTodoDataSource extends Mock {
-  // Define mock methods that your repository calls
-  Stream<List<TodoModel>> getTodosStream(String userId);
-  Future<void> addTodo(String userId, TodoModel todo);
-  Future<void> updateTodo(String userId, TodoModel todo);
-  Future<void> deleteTodo(String userId, String todoId);
-}
+// Mocks for Firebase dependencies
+class MockFirebaseFirestore extends Mock implements FirebaseFirestore {}
+class MockFirebaseAuth extends Mock implements FirebaseAuth {}
+class MockCollectionReference extends Mock implements CollectionReference<Map<String, dynamic>> {} // Specify the type argument
+class MockDocumentReference extends Mock implements DocumentReference<Map<String, dynamic>> {} // Specify the type argument
+class MockQuerySnapshot extends Mock implements QuerySnapshot<Map<String, dynamic>> {} // Specify the type argument
+class MockQueryDocumentSnapshot extends Mock implements QueryDocumentSnapshot<Map<String, dynamic>> {} // Specify the type argument
+class MockDocumentSnapshot extends Mock implements DocumentSnapshot<Map<String, dynamic>> {} // Specify the type argument
+
 
 void main() {
   late TodoRepositoryImpl todoRepository;
-  late MockTodoDataSource mockTodoDataSource;
+  late MockFirebaseFirestore mockFirestore;
+  late MockFirebaseAuth mockAuth;
+  late MockCollectionReference mockTodosCollection;
+  late MockDocumentReference mockUserDocument;
+  late MockCollectionReference mockUserTodosCollection;
+
 
   setUp(() {
-    mockTodoDataSource = MockTodoDataSource();
-    todoRepository = TodoRepositoryImpl(mockTodoDataSource);
+    mockFirestore = MockFirebaseFirestore();
+    mockAuth = MockFirebaseAuth();
+    mockTodosCollection = MockCollectionReference();
+    mockUserDocument = MockDocumentReference();
+    mockUserTodosCollection = MockCollectionReference();
+
+
+    // Mock the sequence of calls to get to the user's todo collection
+    when(mockFirestore.collection('todos')).thenReturn(mockTodosCollection);
+    when(mockTodosCollection.doc(any)).thenReturn(mockUserDocument);
+    when(mockUserDocument.collection('userTodos')).thenReturn(mockUserTodosCollection);
+
+
+    todoRepository = TodoRepositoryImpl(firestore: mockFirestore, auth: mockAuth);
   });
 
   group('TodoRepositoryImpl', () {
     final userId = 'testUserId';
-    final todo = Todo(id: '1', title: 'Test Todo', isDone: false, userId: userId);
-    final todoModel = TodoModel(id: '1', title: 'Test Todo', isDone: false, userId: userId);
-    final updatedTodo = Todo(id: '1', title: 'Updated Todo', isDone: true, userId: userId);
-    final updatedTodoModel = TodoModel(id: '1', title: 'Updated Todo', isDone: true, userId: userId);
+    final todo = Todo(id: '1', title: 'Test Todo', description: 'Description', isCompleted: false); // Added missing fields
+    final todoModel = TodoModel(id: '1', title: 'Test Todo', description: 'Description', isCompleted: false); // Added missing fields and corrected isCompleted
 
-    test('getTodos returns a stream of Todos from the data source', () {
-      final mockStreamController = StreamController<List<TodoModel>>();
-      final mockStream = mockStreamController.stream;
 
-      when(mockTodoDataSource.getTodosStream(userId))
-          .thenAnswer((_) => mockStream);
+    test('getTodos returns a stream of Todos from Firestore', () {
+      final mockSnapshot = MockQuerySnapshot();
+      final mockDocumentSnapshot = MockQueryDocumentSnapshot();
+      when(mockDocumentSnapshot.data()).thenReturn(todoModel.toDocument()); // Mock the data
+      when(mockDocumentSnapshot.id).thenReturn(todoModel.id); // Mock the ID
+      when(mockSnapshot.docs).thenReturn([mockDocumentSnapshot]); // Mock the list of documents
+
+
+      // Mock the snapshots stream
+      final streamController = StreamController<MockQuerySnapshot>();
+      when(mockUserTodosCollection.snapshots()).
+          thenAnswer((_) => streamController.stream as Stream<QuerySnapshot<Map<String, dynamic>>>);
+
 
       final result = todoRepository.getTodos(userId);
 
+
       expect(result, isA<Stream<List<Todo>>>());
 
-      // Emit data from the mock data source stream
-      mockStreamController.add([todoModel]);
+
+      // Emit data from the mock snapshot stream
+      streamController.add(mockSnapshot);
+
 
       // Verify that the repository's stream emits the expected mapped Todo
       expect(
@@ -51,40 +82,112 @@ void main() {
           [todo], // Expecting a list containing the mapped Todo
         ]),
       );
+
+
+      streamController.close(); // Close the stream controller
     });
 
-    test('addTodo calls the data source to add a todo', () async {
-      when(mockTodoDataSource.addTodo(userId, any))
-          .thenAnswer((_) async => Future.value());
+    test('addTodo calls Firestore to add a todo', () async {
+      final mockDocumentReference = MockDocumentReference();
+      // Corrected: Use argThat with isA for the positional Map argument
+      when(mockUserTodosCollection.add(any as Map<String, dynamic>)).thenAnswer((_) async => mockDocumentReference);
+
 
       await todoRepository.addTodo(userId, todo);
 
-      verify(mockTodoDataSource.addTodo(userId, any)).called(1);
-      // You could also verify that the correct TodoModel is passed if needed
-      // verify(mockTodoDataSource.addTodo(userId, argThat(isA<TodoModel>())));
+
+      // Verify that the add method was called with the correct TodoModel's document data
+      verify(mockUserTodosCollection.add(todoModel.toDocument())).called(1);
     });
 
-    test('updateTodo calls the data source to update a todo', () async {
-      when(mockTodoDataSource.updateTodo(userId, any))
-          .thenAnswer((_) async => Future.value());
+    test('updateTodo calls Firestore to update a todo', () async {
+       final mockTodoDocument = MockDocumentReference();
+       when(mockUserTodosCollection.doc(todo.id)).thenReturn(mockTodoDocument); // Mock getting the document reference
+       // Corrected: Use argThat with isA<Map<Object, Object?>>() for the update method's Map argument
+       when(mockTodoDocument.update(any as Map<Object, Object?>)).thenAnswer((_) async => Future.value());
 
-      await todoRepository.updateTodo(userId, updatedTodo);
 
-      verify(mockTodoDataSource.updateTodo(userId, any)).called(1);
-      // You could also verify that the correct TodoModel is passed if needed
-      // verify(mockTodoDataSource.updateTodo(userId, argThat(isA<TodoModel>())));
+      await todoRepository.updateTodo(userId, todo);
+
+
+      // Verify that the update method was called with the correct TodoModel's document data
+      verify(mockTodoDocument.update(todoModel.toDocument())).called(1);
     });
 
-    test('deleteTodo calls the data source to delete a todo', () async {
+    test('deleteTodo calls Firestore to delete a todo', () async {
       final todoId = 'todoToDeleteId';
-      when(mockTodoDataSource.deleteTodo(userId, todoId))
-          .thenAnswer((_) async => Future.value());
+       final mockTodoDocument = MockDocumentReference();
+       when(mockUserTodosCollection.doc(todoId)).thenReturn(mockTodoDocument); // Mock getting the document reference
+       when(mockTodoDocument.delete()).thenAnswer((_) async => Future.value()); // Mock the delete method
+
 
       await todoRepository.deleteTodo(userId, todoId);
 
-      verify(mockTodoDataSource.deleteTodo(userId, todoId)).called(1);
+
+      // Verify that the delete method was called
+      verify(mockTodoDocument.delete()).called(1);
     });
 
     // Add tests for error handling scenarios if your repository handles them
+    test('getTodos handles errors from Firestore stream', () {
+       final mockSnapshot = MockQuerySnapshot();
+       final error = Exception('Firestore stream error');
+
+
+      // Mock the snapshots stream to emit an error
+       final streamController = StreamController<MockQuerySnapshot>();
+       when(mockUserTodosCollection.snapshots()).
+          thenAnswer((_) => streamController.stream as Stream<QuerySnapshot<Map<String, dynamic>>>);
+
+
+       final result = todoRepository.getTodos(userId);
+
+
+       expect(result, emitsError(isA<Exception>())); // Expect an error to be emitted
+
+
+       // Add the error to the stream
+       streamController.addError(error);
+
+
+       streamController.close(); // Close the stream controller
+    });
+
+
+    test('addTodo handles errors from Firestore', () {
+      final error = Exception('Firestore add error');
+      // Use argThat for consistency in error handling test
+      when(mockUserTodosCollection.add(any as Map<String, dynamic>)).thenThrow(error); // Mock the add method to throw an error
+
+
+      expect(() => todoRepository.addTodo(userId, todo), throwsA(isA<Exception>())); // Expect the addTodo method to throw the error
+      verify(mockUserTodosCollection.add(todoModel.toDocument())).called(1); // Verify that add was still attempted
+    });
+
+
+     test('updateTodo handles errors from Firestore', () {
+       final mockTodoDocument = MockDocumentReference();
+       when(mockUserTodosCollection.doc(todo.id)).thenReturn(mockTodoDocument); // Mock getting the document reference
+       final error = Exception('Firestore update error');
+       // Use argThat with isA<Map<Object, Object?>>() for consistency in error handling test
+       when(mockTodoDocument.update(any as Map<Object, Object?>)).thenThrow(error);
+
+
+       expect(() => todoRepository.updateTodo(userId, todo), throwsA(isA<Exception>())); // Expect the updateTodo method to throw the error
+       verify(mockTodoDocument.update(todoModel.toDocument())).called(1); // Verify that update was still attempted
+     });
+
+
+     test('deleteTodo handles errors from Firestore', () {
+       final todoId = 'todoToDeleteId';
+       final mockTodoDocument = MockDocumentReference();
+       when(mockUserTodosCollection.doc(todoId)).thenReturn(mockTodoDocument); // Mock getting the document reference
+       final error = Exception('Firestore delete error');
+       when(mockTodoDocument.delete()).thenThrow(error); // Mock the delete method to throw an error
+
+
+       expect(() => todoRepository.deleteTodo(userId, todoId), throwsA(isA<Exception>())); // Expect the deleteTodo method to throw the error
+       verify(mockTodoDocument.delete()).called(1); // Verify that delete was still attempted
+     });
   });
 }

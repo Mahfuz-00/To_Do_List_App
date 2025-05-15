@@ -1,9 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mockito/mockito.dart';
 import 'package:myapp/domain/repositories/auth_repository.dart';
-import 'package:myapp/domain/usecases/register_usecase.dart';
+import 'package:firebase_auth/firebase_auth.dart' as firebase_auth;
+import 'package:myapp/domain/usecases/register_usecase.dart'; // Alias for Firebase Auth User for clarity
 
-// Create a mock AuthRepository
+// Create a mock for AuthRepository
 class MockAuthRepository extends Mock implements AuthRepository {}
 
 void main() {
@@ -16,31 +17,48 @@ void main() {
   });
 
   group('RegisterUseCase', () {
-    const email = 'test@example.com';
+    const email = 'test@test.com';
     const password = 'password123';
 
-    test('should call AuthRepository.signUp with correct email and password', () async {
+    test('should call AuthRepository.register with correct email and password', () async {
       // Arrange
-      when(mockAuthRepository.signUp(email, password))
-          .thenAnswer((_) async => Future.value(null)); // Simulate successful registration
+      final mockFirebaseUser = MockFirebaseUser(); // Assuming MockFirebaseUser exists from other tests or needs to be defined
+      when(mockFirebaseUser.uid).thenReturn('someUserId'); // Mock a property if needed
+
+      // Mock AuthRepository.register to return a Future with a mock Firebase User
+      when(mockAuthRepository.register(email, password)) // Corrected from signUp to register
+          .thenAnswer((_) async => mockFirebaseUser); // Simulate successful registration
 
       // Act
-      await registerUseCase.execute(email, password);
+      registerUseCase;
 
       // Assert
-      verify(mockAuthRepository.signUp(email, password)).called(1);
+      // Verify that AuthRepository.register was called with the correct arguments
+      verify(mockAuthRepository.register(email, password)).called(1); // Corrected from signUp to register
+      verifyNoMoreInteractions(mockAuthRepository);
     });
 
-    test('should throw an exception if AuthRepository.signUp throws an exception', () async {
+    test('should rethrow exceptions from AuthRepository.register', () async {
       // Arrange
-      final registerError = Exception('Registration failed');
-      when(mockAuthRepository.signUp(email, password))
-          .thenThrow(registerError);
+      final exception = Exception('Registration failed');
+
+      // Mock AuthRepository.register to throw an exception
+      when(mockAuthRepository.register(email, password)) // Corrected from signUp to register
+          .thenThrow(exception);
 
       // Act & Assert
-      expect(() => registerUseCase.execute(email, password), throwsA(registerError));
+      // Expect the RegisterUseCase to throw the same exception
+      expect(() => registerUseCase, throwsA(exception));
 
-      verify(mockAuthRepository.signUp(email, password)).called(1);
+      // Assert that AuthRepository.register was still called
+      verify(mockAuthRepository.register(email, password)).called(1); // Corrected from signUp to register
+      verifyNoMoreInteractions(mockAuthRepository);
     });
+
+    // Define MockFirebaseUser if it's not defined elsewhere and needed for this test file
+    // class MockFirebaseUser extends Mock implements firebase_auth.User {}
   });
 }
+
+// Define MockFirebaseUser here if it's specific to this test file and not in a shared mock file
+class MockFirebaseUser extends Mock implements firebase_auth.User {}

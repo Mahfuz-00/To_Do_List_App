@@ -3,6 +3,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:myapp/data/repositories/auth_repository_impl.dart';
 import 'package:myapp/presentation/blocs/auth/auth_event.dart';
 import 'package:myapp/presentation/blocs/auth/auth_state.dart';
 import 'package:myapp/presentation/blocs/todo_list/todo_list_bloc.dart';
@@ -10,8 +11,6 @@ import 'package:myapp/presentation/blocs/todo_list/todo_list_event.dart';
 import 'package:provider/provider.dart';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
-
-import 'package:myapp/data/repositories/auth_repository.dart';
 import 'package:myapp/data/repositories/todo_repository_impl.dart';
 import 'package:myapp/domain/repositories/auth_repository.dart'
     as domain_auth_repository; // Import with alias
@@ -39,7 +38,7 @@ void main() async {
 // import 'firebase_options.dart';
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  MyApp({super.key});
 
   // This widget is the root of your application.
   @override
@@ -69,7 +68,7 @@ class MyApp extends StatelessWidget {
         providers: [
           Provider<domain_auth_repository.AuthRepository>(
             create:
-                (_) => AuthRepositoryImpl(firebaseAuth: FirebaseAuth.instance),
+                (_) => AuthRepositoryImpl(FirebaseAuth.instance),
           ),
           Provider<SignInUseCase>(
             create:

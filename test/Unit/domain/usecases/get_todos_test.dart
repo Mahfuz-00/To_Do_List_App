@@ -19,8 +19,8 @@ void main() {
   group('GetTodosUseCase', () {
     final userId = 'testUserId';
     final mockTodos = [
-      Todo(id: '1', task: 'Task 1', isCompleted: false),
-      Todo(id: '2', task: 'Task 2', isCompleted: true),
+      Todo(id: '1', title: 'Task 1', isCompleted: false),
+      Todo(id: '2', title: 'Task 2', isCompleted: true),
     ];
 
     test('should call TodoRepository.getTodos and return a stream of todos', () {

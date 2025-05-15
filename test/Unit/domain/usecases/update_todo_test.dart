@@ -22,10 +22,8 @@ void main() {
       const userId = 'testUserId';
       final todoToUpdate = Todo(
         id: '1',
-        task: 'Update task',
+        title: 'Update task',
         isCompleted: true,
-        dueDate: DateTime.now(),
-        priority: 'High',
       );
 
       when(mockTodoRepository.updateTodo(userId, todoToUpdate)).thenAnswer((_) async => Future.value(null));
@@ -42,10 +40,8 @@ void main() {
       const userId = 'testUserId';
       final todoToUpdate = Todo(
         id: '1',
-        task: 'Update task',
+        title: 'Update task',
         isCompleted: true,
-        dueDate: DateTime.now(),
-        priority: 'High',
       );
       final expectedException = Exception('Failed to update todo');
 
